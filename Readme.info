@@ -1,0 +1,94 @@
+Requirements
+
+To run this Premium Snake Game, you'll need:
+Python Packages:
+bash
+
+pip install pygame numpy
+
+File Structure:
+
+snake_game/
+├── snake_game.py        # Main game file
+├── highscore.dat        # Auto-created for high scores
+└── snake_save.json      # Auto-created for saved games
+
+How to Run
+Windows:
+
+    Open Command Prompt
+
+    Navigate to game directory:
+    cmd
+
+cd path\to\snake_game
+
+Run the game:
+cmd
+
+    python snake_game.py
+
+macOS/Linux:
+
+    Open Terminal
+
+    Navigate to game directory:
+    bash
+
+cd path/to/snake_game
+
+Make the file executable:
+bash
+
+chmod +x snake_game.py
+
+Run the game:
+bash
+
+    python3 snake_game.py
+
+Game Features
+Controls:
+
+    Movement: WASD or Arrow Keys
+
+    Pause: SPACEBAR
+
+    Save Game: P
+
+    Load Game: L
+
+    Menu Navigation: 1-3 for options, ESC to go back
+
+Difficulty Levels:
+
+    Easy (Slower speed, no obstacles)
+
+    Medium (Normal speed, some obstacles)
+
+    Hard (Faster speed, more obstacles)
+
+Customization:
+
+    Change snake color (Green/Gold/Purple)
+
+    Particle effects when eating food
+
+    Visual score tracking
+
+    High score system
+
+Troubleshooting
+
+If you encounter any issues:
+
+    Ensure all requirements are installed:
+    bash
+
+pip install --upgrade pygame numpy
+
+If you get sound errors, try running with sound disabled by modifying the code:
+python
+
+# Change this in __init__():
+pygame.mixer.init() → pygame.mixer.pre_init(44100, -16, 2, 2048)
