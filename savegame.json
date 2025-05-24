@@ -1,0 +1,1 @@
+{"snake": [[6, 5]], "snake2": [[20, 15]], "dir": [0, -1], "dir2": [-1, 0], "next": [0, -1], "next2": [-1, 0], "score": 0, "score2": 0, "food": [[4, 10], "NORMAL"], "speed": 5, "diff": "EASY", "night": false, "winter": false, "multi": false, "ice": [], "obs": []}

@@ -33,6 +33,10 @@ BLUE = (0, 0, 255)
 GOLD = (255, 215, 0)
 PURPLE = (128, 0, 128)
 BORDER_COLOR = (70, 70, 70)
+ICE_COLOR = (200, 230, 255)
+DARK_NIGHT = (10, 10, 30)
+BUTTON_COLOR = (50, 50, 50)
+BUTTON_HOVER = (70, 70, 70)
 
 # Game states
 MENU = 0
@@ -40,6 +44,39 @@ PLAYING = 1
 PAUSED = 2
 GAME_OVER = 3
 SETTINGS = 4
+
+# Game modes
+NORMAL = 0
+DEAD_OF_NIGHT = 1
+WINTER = 2
+
+
+class Button:
+    def __init__(self, x, y, width, height, text, font, color=BUTTON_COLOR, hover_color=BUTTON_HOVER):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.color = color
+        self.hover_color = hover_color
+        self.is_hovered = False
+
+    def draw(self, surface):
+        color = self.hover_color if self.is_hovered else self.color
+        pygame.draw.rect(surface, color, self.rect, border_radius=5)
+        pygame.draw.rect(surface, WHITE, self.rect, 2, border_radius=5)
+
+        text_surf = self.font.render(self.text, True, WHITE)
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        surface.blit(text_surf, text_rect)
+
+    def check_hover(self, pos):
+        self.is_hovered = self.rect.collidepoint(pos)
+        return self.is_hovered
+
+    def is_clicked(self, pos, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            return self.rect.collidepoint(pos)
+        return False
 
 
 class SnakeGame:
@@ -61,12 +98,32 @@ class SnakeGame:
         self.snake_color = GREEN
         self.high_score = 0
         self.load_high_score()
+        self.game_mode = NORMAL  # NORMAL/DEAD_OF_NIGHT/WINTER
+        self.flashlight_radius = 5  # For DEAD_OF_NIGHT mode
+        self.slip_chance = 0.3  # For WINTER mode
+
+        # Game Over buttons
+        button_width = 200
+        button_height = 50
+        self.restart_button = Button(
+            WINDOW_WIDTH // 2 - button_width - 20,
+            WINDOW_HEIGHT // 2 + 100,
+            button_width, button_height,
+            "Restart", self.font_medium
+        )
+        self.menu_button = Button(
+            WINDOW_WIDTH // 2 + 20,
+            WINDOW_HEIGHT // 2 + 100,
+            button_width, button_height,
+            "Main Menu", self.font_medium
+        )
 
         # Initialize sound system with dummy sounds
         self.sounds = {
             'eat': self.create_beep_sound(440, 0.2),
             'crash': self.create_beep_sound(220, 0.5),
-            'click': self.create_beep_sound(660, 0.1)
+            'click': self.create_beep_sound(660, 0.1),
+            'slip': self.create_beep_sound(330, 0.3)
         }
 
         # Initialize game elements
@@ -99,6 +156,12 @@ class SnakeGame:
         self.speed = self.get_speed()
         self.last_move = time.time()
         self.particles = []
+        self.ice_blocks = []  # For WINTER mode
+        self.slipping = False  # For WINTER mode
+
+        # Initialize ice blocks for WINTER mode
+        if self.game_mode == WINTER:
+            self.ice_blocks = self.create_ice_blocks(10)
 
         # Difficulty settings
         if self.difficulty == "EASY":
@@ -107,6 +170,19 @@ class SnakeGame:
         elif self.difficulty == "HARD":
             self.speed = 15
             self.obstacles = self.create_obstacles(10)
+
+    def create_ice_blocks(self, count=5):
+        ice_blocks = []
+        for _ in range(count):
+            while True:
+                ice = (random.randint(1, GRID_WIDTH - 2),
+                       random.randint(1, GRID_HEIGHT - 2))
+                if (ice not in self.snake and
+                        ice not in self.obstacles and
+                        ice != self.food):
+                    ice_blocks.append(ice)
+                    break
+        return ice_blocks
 
     def get_speed(self):
         if self.difficulty == "EASY": return 8
@@ -118,7 +194,8 @@ class SnakeGame:
             food = (random.randint(1, GRID_WIDTH - 2),
                     random.randint(1, GRID_HEIGHT - 2))
             if (food not in self.snake and
-                    food not in self.obstacles):
+                    food not in self.obstacles and
+                    (self.game_mode != WINTER or food not in self.ice_blocks)):
                 return food
 
     def create_obstacles(self, count=5):
@@ -151,7 +228,8 @@ class SnakeGame:
             "obstacles": self.obstacles,
             "score": self.score,
             "difficulty": self.difficulty,
-            "speed": self.speed
+            "speed": self.speed,
+            "game_mode": self.game_mode
         }
 
         try:
@@ -174,6 +252,7 @@ class SnakeGame:
             self.score = data["score"]
             self.difficulty = data["difficulty"]
             self.speed = data["speed"]
+            self.game_mode = data.get("game_mode", NORMAL)
             self.state = PLAYING
             return True
         except:
@@ -199,6 +278,8 @@ class SnakeGame:
                 self.particles.remove(p)
 
     def handle_events(self):
+        mouse_pos = pygame.mouse.get_pos()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -248,11 +329,6 @@ class SnakeGame:
                         self.state = SETTINGS
                         self.sounds['click'].play()
 
-                elif self.state == GAME_OVER:
-                    if event.key == pygame.K_r:
-                        self.state = MENU
-                        self.sounds['click'].play()
-
                 elif self.state == SETTINGS:
                     if event.key == pygame.K_ESCAPE:
                         self.state = MENU
@@ -266,6 +342,28 @@ class SnakeGame:
                     elif event.key == pygame.K_3:
                         self.snake_color = PURPLE
                         self.sounds['click'].play()
+                    elif event.key == pygame.K_4:
+                        self.game_mode = NORMAL
+                        self.sounds['click'].play()
+                    elif event.key == pygame.K_5:
+                        self.game_mode = DEAD_OF_NIGHT
+                        self.sounds['click'].play()
+                    elif event.key == pygame.K_6:
+                        self.game_mode = WINTER
+                        self.sounds['click'].play()
+
+            elif event.type == pygame.MOUSEMOTION and self.state == GAME_OVER:
+                self.restart_button.check_hover(mouse_pos)
+                self.menu_button.check_hover(mouse_pos)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.state == GAME_OVER:
+                if self.restart_button.is_clicked(mouse_pos, event):
+                    self.state = PLAYING
+                    self.reset_game()
+                    self.sounds['click'].play()
+                elif self.menu_button.is_clicked(mouse_pos, event):
+                    self.state = MENU
+                    self.sounds['click'].play()
 
     def update(self):
         if self.state != PLAYING or self.paused or self.game_over:
@@ -276,7 +374,21 @@ class SnakeGame:
             return
 
         self.last_move = current_time
-        self.direction = self.next_direction
+
+        # Handle slipping in WINTER mode
+        if self.game_mode == WINTER and not self.slipping:
+            head = self.snake[0]
+            if head in self.ice_blocks and random.random() < self.slip_chance:
+                self.slipping = True
+                self.sounds['slip'].play()
+                # Continue in same direction when slipping
+                self.next_direction = self.direction
+            else:
+                self.direction = self.next_direction
+        else:
+            if self.slipping:
+                self.slipping = False
+            self.direction = self.next_direction
 
         # Move snake
         head_x, head_y = self.snake[0]
@@ -347,16 +459,28 @@ class SnakeGame:
         green = self.font_medium.render("1. Green Snake", True, GREEN)
         gold = self.font_medium.render("2. Gold Snake", True, GOLD)
         purple = self.font_medium.render("3. Purple Snake", True, PURPLE)
+
+        # Game mode options
+        normal_mode = self.font_medium.render("4. Normal Mode", True, WHITE)
+        night_mode = self.font_medium.render("5. Dead of Night", True, (100, 100, 255))
+        winter_mode = self.font_medium.render("6. Winter Mode", True, ICE_COLOR)
+
         back = self.font_medium.render("ESC. Back to Menu", True, WHITE)
 
-        self.screen.blit(green, (WINDOW_WIDTH // 2 - green.get_width() // 2, 250))
-        self.screen.blit(gold, (WINDOW_WIDTH // 2 - gold.get_width() // 2, 300))
-        self.screen.blit(purple, (WINDOW_WIDTH // 2 - purple.get_width() // 2, 350))
-        self.screen.blit(back, (WINDOW_WIDTH // 2 - back.get_width() // 2, 400))
+        self.screen.blit(green, (WINDOW_WIDTH // 2 - green.get_width() // 2, 200))
+        self.screen.blit(gold, (WINDOW_WIDTH // 2 - gold.get_width() // 2, 250))
+        self.screen.blit(purple, (WINDOW_WIDTH // 2 - purple.get_width() // 2, 300))
+        self.screen.blit(normal_mode, (WINDOW_WIDTH // 2 - normal_mode.get_width() // 2, 350))
+        self.screen.blit(night_mode, (WINDOW_WIDTH // 2 - night_mode.get_width() // 2, 400))
+        self.screen.blit(winter_mode, (WINDOW_WIDTH // 2 - winter_mode.get_width() // 2, 450))
+        self.screen.blit(back, (WINDOW_WIDTH // 2 - back.get_width() // 2, 550))
 
     def draw_game(self):
         # Background
-        self.screen.fill(BLACK)
+        if self.game_mode == DEAD_OF_NIGHT:
+            self.screen.fill(DARK_NIGHT)
+        else:
+            self.screen.fill(BLACK)
 
         # Game border with 3D effect
         border = pygame.Rect(self.game_x - 10, self.game_y - 10,
@@ -366,7 +490,10 @@ class SnakeGame:
 
         # Game area
         game_area = pygame.Rect(self.game_x, self.game_y, GAME_WIDTH, GAME_HEIGHT)
-        pygame.draw.rect(self.screen, BLACK, game_area)
+        if self.game_mode == DEAD_OF_NIGHT:
+            pygame.draw.rect(self.screen, DARK_NIGHT, game_area)
+        else:
+            pygame.draw.rect(self.screen, BLACK, game_area)
 
         # Draw obstacles
         for obs in self.obstacles:
@@ -377,6 +504,26 @@ class SnakeGame:
             pygame.draw.rect(self.screen, BLUE, rect)
             pygame.draw.rect(self.screen, (0, 0, 100), rect, 2)
 
+        # Draw ice blocks for WINTER mode
+        if self.game_mode == WINTER:
+            for ice in self.ice_blocks:
+                rect = pygame.Rect(
+                    self.game_x + ice[0] * GRID_SIZE,
+                    self.game_y + ice[1] * GRID_SIZE,
+                    GRID_SIZE, GRID_SIZE)
+                pygame.draw.rect(self.screen, ICE_COLOR, rect)
+                pygame.draw.rect(self.screen, (150, 200, 255), rect, 1)
+
+                # Draw ice pattern
+                for i in range(3):
+                    offset = i * 3
+                    pygame.draw.line(self.screen, (220, 240, 255),
+                                     (rect.left + offset, rect.top + offset),
+                                     (rect.left + offset, rect.bottom - offset), 1)
+                    pygame.draw.line(self.screen, (220, 240, 255),
+                                     (rect.left + offset, rect.top + offset),
+                                     (rect.right - offset, rect.top + offset), 1)
+
         # Draw food
         food_rect = pygame.Rect(
             self.game_x + self.food[0] * GRID_SIZE,
@@ -384,6 +531,24 @@ class SnakeGame:
             GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(self.screen, RED, food_rect)
         pygame.draw.rect(self.screen, (100, 0, 0), food_rect, 2)
+
+        # Draw snake with flashlight effect for DEAD_OF_NIGHT mode
+        if self.game_mode == DEAD_OF_NIGHT:
+            # Create a surface for the darkness
+            darkness = pygame.Surface((GAME_WIDTH, GAME_HEIGHT), pygame.SRCALPHA)
+            darkness.fill((0, 0, 0, 220))  # Semi-transparent black
+
+            # Draw the flashlight around the snake's head
+            head = self.snake[0]
+            center = (head[0] * GRID_SIZE + GRID_SIZE // 2,
+                      head[1] * GRID_SIZE + GRID_SIZE // 2)
+
+            # Draw gradient circle for flashlight
+            for radius in range(self.flashlight_radius * GRID_SIZE, 0, -10):
+                alpha = min(255, radius * 2)
+                pygame.draw.circle(darkness, (0, 0, 0, alpha), center, radius)
+
+            self.screen.blit(darkness, (self.game_x, self.game_y))
 
         # Draw snake
         for i, segment in enumerate(self.snake):
@@ -417,6 +582,15 @@ class SnakeGame:
         diff_text = self.font_small.render(f"Difficulty: {self.difficulty}", True, WHITE)
         self.screen.blit(diff_text, (WINDOW_WIDTH - diff_text.get_width() - 20, 20))
 
+        # Show current mode
+        if self.game_mode == DEAD_OF_NIGHT:
+            mode_text = self.font_small.render("Mode: Dead of Night", True, (100, 100, 255))
+        elif self.game_mode == WINTER:
+            mode_text = self.font_small.render("Mode: Winter", True, ICE_COLOR)
+        else:
+            mode_text = self.font_small.render("Mode: Normal", True, WHITE)
+        self.screen.blit(mode_text, (WINDOW_WIDTH - mode_text.get_width() - 20, 60))
+
         # Pause text
         if self.paused:
             pause_text = self.font_large.render("PAUSED", True, WHITE)
@@ -442,15 +616,22 @@ class SnakeGame:
                          (WINDOW_WIDTH // 2 - game_over.get_width() // 2,
                           WINDOW_HEIGHT // 2 - 100))
 
+        # Score text
         score_text = self.font_medium.render(f"Final Score: {self.score}", True, WHITE)
         self.screen.blit(score_text,
                          (WINDOW_WIDTH // 2 - score_text.get_width() // 2,
-                          WINDOW_HEIGHT // 2))
+                          WINDOW_HEIGHT // 2 - 30))
 
-        restart = self.font_medium.render("Press R to Return to Menu", True, WHITE)
-        self.screen.blit(restart,
-                         (WINDOW_WIDTH // 2 - restart.get_width() // 2,
-                          WINDOW_HEIGHT // 2 + 100))
+        # High score text if new record
+        if self.score == self.high_score and self.score > 0:
+            hs_text = self.font_medium.render("NEW HIGH SCORE!", True, GOLD)
+            self.screen.blit(hs_text,
+                             (WINDOW_WIDTH // 2 - hs_text.get_width() // 2,
+                              WINDOW_HEIGHT // 2 + 20))
+
+        # Draw buttons
+        self.restart_button.draw(self.screen)
+        self.menu_button.draw(self.screen)
 
     def draw(self):
         if self.state == MENU:
